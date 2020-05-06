@@ -5,10 +5,16 @@ var path = require('path');
 var cookieParser = require('cookie-parser');
 var logger = require('morgan');
 
+const { zp_session } = require('./sequelizes')
+const Sequelize = require('sequelize')
+const Op = Sequelize.Op
+
 var indexRouter = require('./routes/index');
 var usersRouter = require('./routes/users');
 
 var app = express();
+
+var newWs;
 
 const axios = require('axios')
 const WebSocket = require('ws');
@@ -23,24 +29,22 @@ app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.use('/', indexRouter);
-app.use('/users', usersRouter);
+// app.use('/', indexRouter);
+// app.use('/zopim', usersRouter);
 
 // catch 404 and forward to error handler
-app.use(function(req, res, next) {
-  next(createError(404));
-});
+// app.use(function(req, res, next) {
+//   next(createError(404));
+// });
 
-// error handler
-app.use(function(err, req, res, next) {
-  // set locals, only providing error in development
-  res.locals.message = err.message;
-  res.locals.error = req.app.get('env') === 'development' ? err : {};
+// // error handler
+// app.use(function(err, req, res, next) {
+//   res.locals.message = err.message;
+//   res.locals.error = req.app.get('env') === 'development' ? err : {};
 
-  // render the error page
-  res.status(err.status || 500);
-  res.render('error');
-});
+//   res.status(err.status || 500);
+//   res.render('error');
+// });
 
 const ACCESS_TOKEN = "8Ot0lh5g1YqJl8lSfWOIb7pDSCrrKdg3PocWo8WpBsk5K2L4qFpkvrvOv4Rm5L3f";
 
@@ -57,8 +61,426 @@ const SUBSCRIPTION_DATA_SIGNAL = "DATA";
 const TYPE = {
   VISITOR: "Visitor"
 };
-
+const startAgentSessionPayload = `mutation {
+        startAgentSession(access_token: "${ACCESS_TOKEN}") {
+            websocket_url
+            session_id
+            client_id
+        }
+    }`;
+    
 const channelsToBeTransferred = [];
+
+axios({
+  method: 'POST',
+  url: CHAT_API_URL,
+  data: {
+  	query: startAgentSessionPayload
+  }
+}).then((response) => {
+	let startAgentSessionResponse = response.data.data.startAgentSession
+	let messageSubscriptionId;
+
+	zp_session.create({
+        session_id: startAgentSessionResponse.session_id,
+        client_id: startAgentSessionResponse.client_id,
+        token: ACCESS_TOKEN,
+        chat_api_url: CHAT_API_URL,
+        websocket_url: startAgentSessionResponse.websocket_url
+      }).then( zp_session_created => {
+      	console.log('zp_session_created success');
+      })
+
+      newWs = new WebSocket(startAgentSessionResponse.websocket_url);
+      newWs.on('open', function open() {
+      	console.log('newWs open');
+
+
+	    /************************
+	     * PING for prevent  *
+	     * timed out *
+	     ************************/
+	     pingInterval = setInterval(() => {
+      		// console.log('PINGs');
+      		newWs.send(
+      			JSON.stringify({
+      				sig: "PING",
+      				payload: +new Date()
+      			})
+  			);
+      	}, 5000);
+
+
+	    /************************
+	     * Agent status to ONLINE *
+	     ************************/
+	    newWs.send(JSON.stringify(udpateAgentStatusPayload()));
+	    console.log("[updateAgentStatus] Request sent");
+
+	    /************************
+	     * Message subscription *
+	     ************************/
+	    newWs.send(JSON.stringify(subsMsgPayload()));
+	    console.log("[message] Subscription request sent");
+
+      })
+
+      newWs.on('message', function incoming(messageData) {
+      	const data = JSON.parse(messageData);
+
+      	// Listen to successful message subscription request
+	    if (data.id === REQUEST_ID.MESSAGE_SUBSCRIPTION) {
+	      if (data.payload.errors && data.payload.errors.length > 0) {
+	        console.log("[message] Failed to subscribe to message");
+	      } else {
+	        messageSubscriptionId = data.payload.data.subscription_id;
+	        console.log("[message] Successfully subscribe to message");
+	      }
+	    }
+
+	    // Listen to successful update agent status request
+	    if (data.id === REQUEST_ID.UPDATE_AGENT_STATUS) {
+	      if (data.payload.errors && data.payload.errors.length > 0) {
+	        console.log("[updateAgentStatus] Failed to update agent status");
+	      } else {
+	        console.log("[updateAgentStatus] Successfully update agent status");
+	      }
+	    }
+
+	    if (data.id === REQUEST_ID.SEND_MESSAGE) {
+	      if (data.payload.errors && data.payload.errors.length > 0) {
+	      	console.log(data.payload.errors)
+	        console.log("[sendMessage] Failed to send message to visitor");
+	      } else {
+	        console.log("[sendMessage] Successfully to send message to visitor");
+	      }
+	    }
+
+	    if (data.id === REQUEST_ID.SEND_QUICK_REPLIES) {
+	      if (data.payload.errors && data.payload.errors.length > 0) {
+	        console.log("[sendQuickReplies] Failed to send message to visitor");
+	      } else {
+	        console.log(
+	          "[sendQuickReplies] Successfully to send message to visitor"
+	        );
+	      }
+	    }
+
+	    if (data.id === REQUEST_ID.TRANSFER_TO_DEPARTMENT) {
+	      if (data.payload.errors && data.payload.errors.length > 0) {
+	        console.log(
+	          "[transferToDepartment] Failed to transfer visitor to a department"
+	        );
+	      } else {
+	        console.log(
+	          "[transferToDepartment] Successfully to transfer visitor to a department"
+	        );
+	      }
+	    }
+
+	    if (data.id === REQUEST_ID.GET_DEPARTMENTS) {
+	      const channelToBeTransferred = channelsToBeTransferred.pop();
+
+	      if (data.payload.errors && data.payload.errors.length > 0) {
+	        console.log("[getDepartments] Failed to get departments info");
+	      } else {
+	        console.log("[getDepartments] Successfully to get departments info");
+
+	        const allDepartments = data.payload.data.departments.edges;
+	        const onlineDepartments = allDepartments.filter(
+	          department => department.node.status === "ONLINE"
+	        );
+
+	        if (onlineDepartments.length > 0) {
+	          const pickRandomDepartment = Math.floor(
+	            Math.random() * onlineDepartments.length
+	          );
+	          const onlineDepartment = onlineDepartments[pickRandomDepartment].node;
+	          var newMessage = "Kamu akan kami arahkan ke  " + onlineDepartment.name + " department secepatnya!";
+
+	          /********************************************************
+	           * Notify visitor that they are going to be transferred *
+	           ********************************************************/
+	          newWs.send(JSON.stringify(sendMsgPayload(channelToBeTransferred, newMessage, true)));
+
+	          /***********************************
+	           *Transfer channel to a department *
+	           ***********************************/
+	          const transferToDepartmentQuery = {
+	            payload: {
+	              query: `mutation {
+	                                transferToDepartment(
+	                                    channel_id: "${channelToBeTransferred}", 
+	                                    department_id: "${onlineDepartment.id}",
+	                                    leave: true) {
+	                                    success
+	                                }
+	                            }`
+	            },
+	            type: "request",
+	            id: REQUEST_ID.TRANSFER_TO_DEPARTMENT
+	          };
+
+	          newWs.send(JSON.stringify(transferToDepartmentQuery));
+	        } else {
+
+	          var newMessage = "Maaf, sepertinya hanya aku yang sedang online hehe";
+	          /****************************************************
+	           * Notify visitor that there is no online department*
+	           ****************************************************/
+	          newWs.send(JSON.stringify(sendMsgPayload(channelToBeTransferred, newMessage, true)));
+	        }
+	      }
+	    }
+
+      	if (
+			data.sig === SUBSCRIPTION_DATA_SIGNAL &&
+			data.subscription_id === messageSubscriptionId &&
+			data.payload.data
+	    ) {
+	      const chatMessage = data.payload.data.message.node;
+	      const sender = chatMessage.from;
+
+	      if (sender.__typename === TYPE.VISITOR) {
+	        console.log(
+	          `[message] Received: '${chatMessage.content}' from: '${
+	            sender.display_name
+	          }'`
+	        );
+
+	        if (chatMessage.content.toLowerCase().includes("transfer")) {
+	        	console.log('transfers');
+	        } else if (chatMessage.content.toLowerCase().includes("hubungkan ke agent asli")) {
+	        	console.log('ice cream');
+	        	newWs.send(JSON.stringify(getDepartmentsPayload()));
+	        	channelsToBeTransferred.push(chatMessage.channel.id);
+	        } else {
+	        	// console.log(data.payload.data)
+	        	// console.log(data.payload.data.message.node.channel)
+	        	// console.log(data.payload.data.message.node.from)
+
+	        	// newWs.send(JSON.stringify(sendBotFailMsgPayload(chatMessage.channel.id)));
+	          axios({
+				  method: 'POST',
+				  url: "https://kanal.kata.ai/receive_message/e6e922f5-d901-4f94-ae08-83e52960857d",
+				  data: {
+				  	userId: chatMessage.channel.id,
+				  	messages: [{
+				  		type: "text",
+				  		content: chatMessage.content
+				  	}]
+				  }
+				}).then((response) => {
+					console.log('chat sent to kata')
+				}, (error) => {
+					console.log('error')
+					console.log(error.response.status)
+					newWs.send(JSON.stringify(sendBotFailMsgPayload(chatMessage.channel.id)));
+				});
+	        }
+	      }
+	    }
+      })
+
+      app.post('/zopim/fromkata', function(req, res, next) {
+      	zp_session.findAll().then( zp_session_data => {
+      		let websocket_url = zp_session_data[0].websocket_url;
+			let newMessage = req.body.messages[0].content;
+			let channel_id = req.body.userId;
+			
+			console.log(newMessage);
+			newWs.send(JSON.stringify(sendMsgPayload(channel_id, newMessage, true)));
+			if (newMessage.toLowerCase().startsWith('duh maaf')) {
+				newWs.send(JSON.stringify(sendBotDontGetPayload(channel_id)));
+			}
+      	})
+      	res.status(200).send({});
+      });
+
+}, (error) => {
+	console.log('error')
+	console.log(error.response.status)
+});
+
+function udpateAgentStatusPayload () {
+  	const updateAgentStatusQuery = {
+      payload: {
+        query: `mutation {
+                    updateAgentStatus(status: ONLINE) {
+                        node {
+                            id
+                        }
+                    }
+                }`
+      },
+      type: "request",
+      id: REQUEST_ID.UPDATE_AGENT_STATUS
+    };
+    return updateAgentStatusQuery;
+}
+
+function sendMsgPayload (channel_id, message, backoff) {
+	const sendMessageQuery = {
+		payload: {
+			query: `mutation {
+				sendMessage(
+				backoff: ${backoff}
+				channel_id: "${channel_id}",
+				msg: "${message}"
+				) {
+					success
+				}
+			}`
+		},
+		type: "request",
+		id: REQUEST_ID.SEND_MESSAGE
+	};
+	return sendMessageQuery;	
+}
+
+function subsMsgPayload () {
+	const messageSubscriptionQuery = {
+      payload: {
+        query: `subscription {
+                    message {
+                        node {
+                            id
+                            content
+                            channel {
+                                id
+                            }
+                            from {
+                                __typename
+                                display_name
+                            }
+                        }
+                    }
+                }`
+      },
+      type: "request",
+      id: REQUEST_ID.MESSAGE_SUBSCRIPTION
+    };
+    return messageSubscriptionQuery;
+}
+
+function sendBotFailMsgPayload (channel_id) {
+	const sendQuickRepliesQuery = {
+        payload: {
+          query: `mutation {
+                            sendQuickReplies(
+                                channel_id: "${channel_id}",
+                                msg: "Oops, sepertinya bot kita sedang bermasalah, kamu mau gak kita hubungkan ke Agent beneran?",
+                                quick_replies: [
+                                    {
+                                        action: {
+                                            value: "Hubungkan ke Agent asli"
+                                        },
+                                        text: "Hubungkan"
+                                    },
+                                    {
+                                        action: {
+                                            value: "Gak usah gpp kok"
+                                        },
+                                        text: "Gausah"
+                                    }
+                                ],
+                                fallback: {
+                                    msg: "Oops, sepertinya bot kita sedang bermasalah, kamu mau gak kita hubungkan ke Agent beneran?"
+                                    options: [
+                                        "Hubungkan",
+                                        "Gausah"
+                                    ]
+                                }
+                            ) {
+                                success
+                            }
+                        }`
+        },
+        type: "request",
+        id: REQUEST_ID.SEND_QUICK_REPLIES
+    };
+	return sendQuickRepliesQuery;
+}
+
+function sendBotDontGetPayload (channel_id) {
+	const sendQuickRepliesQuery = {
+        payload: {
+          query: `mutation {
+                            sendQuickReplies(
+                                channel_id: "${channel_id}",
+                                msg: "Mau aku arahkan ke agent asli?",
+                                quick_replies: [
+                                    {
+                                        action: {
+                                            value: "Hubungkan ke Agent asli"
+                                        },
+                                        text: "Hubungkan"
+                                    },
+                                    {
+                                        action: {
+                                            value: "Gak usah gpp kok"
+                                        },
+                                        text: "Gausah"
+                                    }
+                                ],
+                                fallback: {
+                                    msg: "Mau aku arahkan ke agent asli?"
+                                    options: [
+                                        "Hubungkan",
+                                        "Gausah"
+                                    ]
+                                }
+                            ) {
+                                success
+                            }
+                        }`
+        },
+        type: "request",
+        id: REQUEST_ID.SEND_QUICK_REPLIES
+    };
+	return sendQuickRepliesQuery;
+}
+
+function getDepartmentsPayload () {
+	const getDepartmentsQuery = {
+        payload: {
+          query: `query {
+                            departments {
+                                edges {
+                                    node {
+                                        id
+                                        name
+                                        status
+                                    }
+                                }
+                            }
+                        }`
+        },
+        type: "request",
+        id: REQUEST_ID.GET_DEPARTMENTS
+    };
+    return getDepartmentsQuery;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* EXAMPLE */
 let messageSubscriptionId;
 
 async function generateNewAgentSession(access_token) {
@@ -83,8 +505,7 @@ async function generateNewAgentSession(access_token) {
 
 async function startAgentSession() {
   try {
-    const startAgentSessionResp = (await generateNewAgentSession(ACCESS_TOKEN))
-      .body;
+    const startAgentSessionResp = (await generateNewAgentSession(ACCESS_TOKEN)).body;
 
     if (
       startAgentSessionResp.errors &&
@@ -97,6 +518,37 @@ async function startAgentSession() {
       );
 
       const { websocket_url } = startAgentSessionResp.data.startAgentSession;
+      console.log('=== websocket url ===')
+      console.log(websocket_url)
+	    zp_session.findAll({
+			where: {
+				token: ACCESS_TOKEN
+			}
+		}).then( zp_session_findall => {
+			if (zp_session_findall.length > 0) {
+				zp_session_findall.update({
+					session_id: startAgentSessionResp.data.startAgentSession.session_id,
+			        client_id: startAgentSessionResp.data.startAgentSession.client_id,
+			        token: ACCESS_TOKEN,
+			        chat_api_url: CHAT_API_URL,
+			        websocket_url: websocket_url
+				}, {
+				  where: {
+				    token: ACCESS_TOKEN
+				  }
+				});
+			} else {
+				zp_session.create({
+			        session_id: startAgentSessionResp.data.startAgentSession.session_id,
+			        client_id: startAgentSessionResp.data.startAgentSession.client_id,
+			        token: ACCESS_TOKEN,
+			        chat_api_url: CHAT_API_URL,
+			        websocket_url: websocket_url
+			      }).then( zp_session_created => {
+			      	console.log('zp_session_created success');
+			      })
+			}
+		})
 
       connectWebSocket(websocket_url);
     }
@@ -341,8 +793,7 @@ function connectWebSocket(websocket_url) {
           }'`
         );
 
-        if (chatMessage.content.toLowerCase().includes("transfer")) {
-          channelsToBeTransferred.push(chatMessage.channel.id);
+        if (chatMessage.content.toLowerCase().includes("transfer")) {c
 
           /*****************************************************************
            * Get current departments information for transferring the chat *
@@ -431,25 +882,43 @@ function connectWebSocket(websocket_url) {
 
           webSocket.send(JSON.stringify(sendQuickRepliesQuery));
         } else {
+        	// console.log('channel_id: ' + chatMessage.channel.id);
           /*************************
            * Reply back to visitor *
            *************************/
-          const sendMessageQuery = {
-            payload: {
-              query: `mutation {
-                                sendMessage(
-                                    channel_id: "${chatMessage.channel.id}",
-                                    msg: "${chatMessage.content}"
-                                ) {
-                                    success
-                                }
-                            }`
-            },
-            type: "request",
-            id: REQUEST_ID.SEND_MESSAGE
-          };
+          // const sendMessageQuery = {
+          //   payload: {
+          //     query: `mutation {
+          //                       sendMessage(
+          //                           channel_id: "${chatMessage.channel.id}",
+          //                           msg: "${chatMessage.content}"
+          //                       ) {
+          //                           success
+          //                       }
+          //                   }`
+          //   },
+          //   type: "request",
+          //   id: REQUEST_ID.SEND_MESSAGE
+          // };
 
-          webSocket.send(JSON.stringify(sendMessageQuery));
+          // webSocket.send(JSON.stringify(sendMessageQuery));
+
+          axios({
+			  method: 'POST',
+			  url: "https://kanal.kata.ai/receive_message/e6e922f5-d901-4f94-ae08-83e52960857d",
+			  data: {
+			  	userId: chatMessage.channel.id,
+			  	messages: [{
+			  		type: "text",
+			  		content: chatMessage.content
+			  	}]
+			  }
+			}).then((response) => {
+				console.log('chat sent to kata')
+			}, (error) => {
+				console.log('error')
+				console.log(error.response.status)
+			});
         }
       }
     }
@@ -470,7 +939,7 @@ function connectWebSocket(websocket_url) {
   attachEventListeners(webSocket);
 }
 
-startAgentSession();
+// startAgentSession();
 
 // keep the script running
 process.stdin.resume();
