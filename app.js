@@ -84,6 +84,15 @@ app.post('/zopim/fromkata', function(req, res, next) {
 	res.status(200).send({});
 });
 
+app.get('/zopim/close', function(req, res, next) {
+  if (newWs !== undefined) {
+    newWs.close();
+  }
+  res.status(200).send({
+    websocket: 'disconnected'
+  })
+})
+
 app.post('/zopim/connect', function(req, res, next) {
 	let newZdToken = req.body.token;
 
@@ -131,6 +140,7 @@ function doAttachEventListeners(ws) {
 }
 
 function doHandleOpen() {
+  console.log('=== Web Socket is OPENING ===');
     /************************
      * PING for prevent  *
      * timed out *
@@ -160,7 +170,6 @@ function doHandleOpen() {
 }
 
 function doHandleMessage(message) {
-	console.log('doHandleMessage')
 	const data = JSON.parse(message);
 
   	// Listen to successful message subscription request
