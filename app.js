@@ -78,15 +78,13 @@ app.post('/zopim/fromkata', function(req, res, next) {
 	res.status(200).send({});
 });
 
-app.get('/zopim/close', function(req, res, next) {
-	newWs.close();
-	res.status(200).send({
-		status: 'disconnected'
-	});
-});
-
 app.post('/zopim/connect', function(req, res, next) {
 	let newZdToken = req.body.token;
+
+  if (newWs !== undefined) {
+    newWs.close();
+  }
+  
 	console.log('token: ' + newZdToken)
 	let startAgentSessionQueryPayload = startAgentSessionPayload(newZdToken);
 	axios({
@@ -122,7 +120,6 @@ function doAttachEventListeners(ws) {
 }
 
 function doHandleOpen() {
-	console.log('doHandleOpen');
     /************************
      * PING for prevent  *
      * timed out *
@@ -311,7 +308,7 @@ function doHandleMessage(message) {
 }
 
 function doHandleClose() {
-	console.log('doHandleClose')
+	console.log('=== Web Socket is CLOSING ===');
 }
 
 function startAgentSessionPayload (ACCESS_TOKEN) {
