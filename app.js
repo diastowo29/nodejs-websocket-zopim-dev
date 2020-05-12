@@ -84,7 +84,12 @@ app.post('/zopim/connect', function(req, res, next) {
   if (newWs !== undefined) {
     newWs.close();
   }
-  
+
+  zp_session.destroy({
+    where: {},
+    truncate: true
+  })
+
 	console.log('token: ' + newZdToken)
 	let startAgentSessionQueryPayload = startAgentSessionPayload(newZdToken);
 	axios({
