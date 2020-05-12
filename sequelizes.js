@@ -1,11 +1,11 @@
 const Sequelize = require('sequelize')
 const sessionModel = require('./models/session')
 
-const sequelize = new Sequelize(process.env.DATABASE_URL)
+const sequelize_db = new Sequelize(process.env.DATABASE_URL)
 
-const zp_session = sessionModel(sequelize, Sequelize)
+const zp_session = sessionModel(sequelize_db, Sequelize)
 
-sequelize.sync({ force: true })
+sequelize_db.sync({ force: true })
   .then(() => {
     console.log(`Database & tables created!`)
     })
