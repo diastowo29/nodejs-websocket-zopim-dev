@@ -17,6 +17,12 @@ var app = express();
 const axios = require('axios')
 const WebSocket = require('ws');
 
+const PORT = process.env.PORT || 5000
+
+app.listen(PORT, () => {
+  console.log(`server running on port ${PORT}`)
+});
+
 var newWs;
 // view engine setup
 app.set('views', path.join(__dirname, 'views'));
