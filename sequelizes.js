@@ -1,7 +1,7 @@
 const Sequelize = require('sequelize')
 const sessionModel = require('./models/session')
 
-const sequelize_db = new Sequelize('postgres://suncjvkticiuxc:aeed1fc5809e05ad48c2307b34a9db684d4175a252fccecf6900e819ec6e980f@ec2-34-198-243-120.compute-1.amazonaws.com:5432/d5m0iledijdmp0', {
+const sequelize_db = new Sequelize(process.env.DATABASE_URL, {
   dialectOptions: {
     ssl: {
       require: true,
@@ -9,7 +9,7 @@ const sequelize_db = new Sequelize('postgres://suncjvkticiuxc:aeed1fc5809e05ad48
     },
     keepAlive: true,        
   },      
-  ssl: true,
+  ssl: true
 })
 
 const zp_session = sessionModel(sequelize_db, Sequelize)
