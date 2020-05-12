@@ -1,13 +1,7 @@
 const Sequelize = require('sequelize')
 const sessionModel = require('./models/session')
 
-const sequelize = new Sequelize(process.env.DATABASE_URL, {
-    dialect: 'postgres',
-    protocol: 'postgres',
-    dialectOptions: {
-        ssl: true
-    }
-})
+const sequelize = new Sequelize(process.env.DATABASE_URL)
 
 const zp_session = sessionModel(sequelize, Sequelize)
 
