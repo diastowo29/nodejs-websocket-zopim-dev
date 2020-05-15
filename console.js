@@ -1,8 +1,9 @@
 const axios = require('axios');
-console.log(process.env);
+let pingEndpoint = 'https://' + process.env.APP_NAME + '.herokuapp.com/zopim/ping'
 axios({
 	method: 'GET',
-	url: 'https://connector-zopimkata-dev.herokuapp.com/zopim/ping'
+	url: pingEndpoint
 }).then((response) => {
+	console.log('===== PING =====');
 	console.log(response.data);
 })
