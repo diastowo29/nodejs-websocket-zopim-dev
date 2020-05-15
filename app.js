@@ -11,6 +11,7 @@ const Op = Sequelize.Op
 
 var indexRouter = require('./routes/index');
 var usersRouter = require('./routes/users');
+var Queue = require('bull');
 
 var app = express();
 
@@ -52,6 +53,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 // });
 
 const ACCESS_TOKEN = "";
+var chatQue = new Queue('chatque', process.env.REDIS_URL);
 
 const CHAT_API_URL = "https://chat-api.zopim.com/graphql/request";
 const REQUEST_ID = {
@@ -93,10 +95,27 @@ app.get('/zopim/close', function(req, res, next) {
   })
 })
 
+app.get('/zopim/bully', function(req, res, next) {
+  const job = await chatQue.add({
+    foo: 'bar'
+  })
+  res.status(200).send({
+    websocket: 'disconnected'
+  })
+})
+
 app.get('/zopim/ping', function(req, res, next) {
   res.status(200).send({
     ping: 'success'
   })
+})
+
+chatQue.process(async (job) => {
+  console.log('job processed');
+})
+
+chatQue.on('completed', (job, result) => {
+  console.log('job completed');
 })
 
 app.post('/zopim/connect', function(req, res, next) {
@@ -312,22 +331,22 @@ function doHandleMessage(message) {
 
         	// newWs.send(JSON.stringify(sendBotFailMsgPayload(chatMessage.channel.id)));
           axios({
-			  method: 'POST',
-			  url: "https://kanal.kata.ai/receive_message/e6e922f5-d901-4f94-ae08-83e52960857d",
-			  data: {
-			  	userId: chatMessage.channel.id,
-			  	messages: [{
-			  		type: "text",
-			  		content: chatMessage.content
-			  	}]
-			  }
-			}).then((response) => {
-				console.log('chat sent to kata')
-			}, (error) => {
-				console.log('error')
-				console.log(error.response.status)
-				newWs.send(JSON.stringify(sendBotFailMsgPayload(chatMessage.channel.id)));
-			});
+    			  method: 'POST',
+    			  url: "https://kanal.kata.ai/receive_message/e6e922f5-d901-4f94-ae08-83e52960857d",
+    			  data: {
+    			  	userId: chatMessage.channel.id,
+    			  	messages: [{
+    			  		type: "text",
+    			  		content: chatMessage.content
+    			  	}]
+    			  }
+    			}).then((response) => {
+    				console.log('chat sent to kata')
+    			}, (error) => {
+    				console.log('error')
+    				console.log(error.response.status)
+    				newWs.send(JSON.stringify(sendBotFailMsgPayload(chatMessage.channel.id)));
+    			});
         }
       }
     }
