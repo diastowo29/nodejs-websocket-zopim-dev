@@ -15,7 +15,7 @@ var Queue = require('bull');
 
 var app = express();
 
-const axios = require('axios')
+const axios = require('axios');
 const WebSocket = require('ws');
 
 const PORT = process.env.PORT || 5000
