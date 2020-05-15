@@ -93,6 +93,12 @@ app.get('/zopim/close', function(req, res, next) {
   })
 })
 
+app.get('/zopim/ping', function(req, res, next) {
+  res.status(200).send({
+    ping: 'success'
+  })
+})
+
 app.post('/zopim/connect', function(req, res, next) {
 	let newZdToken = req.body.token;
 
