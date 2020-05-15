@@ -53,7 +53,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 // });
 
 const ACCESS_TOKEN = "";
-console.log(process.env);
+console.log(process.env.HEROKU_APP_NAME);
 var chatQue = new Queue('chatque', process.env.REDIS_URL);
 
 const CHAT_API_URL = "https://chat-api.zopim.com/graphql/request";
