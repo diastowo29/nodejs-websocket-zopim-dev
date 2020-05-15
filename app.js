@@ -95,7 +95,7 @@ app.get('/zopim/close', function(req, res, next) {
   })
 })
 
-app.get('/zopim/bully', function(req, res, next) {
+app.get('/zopim/bully', async (req, res, next) => {
   const job = await chatQue.add({
     foo: 'bar'
   })
