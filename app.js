@@ -53,6 +53,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 // });
 
 const ACCESS_TOKEN = "";
+console.log(process.env);
 var chatQue = new Queue('chatque', process.env.REDIS_URL);
 
 const CHAT_API_URL = "https://chat-api.zopim.com/graphql/request";
