@@ -112,8 +112,14 @@ app.get('/zopim/bully', async (req, res, next) => {
 app.get('/zopim/ping', function(req, res, next) {
   zp_session.findAll().then( zp_session_data => {
     console.log(zp_session_data.length);
+    let ws_status = '';
+    if (zp_session_data.length == 0) {
+      ws_status = 'disconnected';
+    } else {
+      ws_status = 'connected';
+    }
     res.status(200).send({
-      ping: 'success'
+      status: ws_status
     });
   });
 });
