@@ -98,7 +98,7 @@ app.get('/zopim/close', function(req, res, next) {
   res.status(200).send({
     websocket: 'disconnected'
   });
-})
+});
 
 app.get('/zopim/bully', async (req, res, next) => {
   const job = await chatQue.add({
@@ -107,7 +107,7 @@ app.get('/zopim/bully', async (req, res, next) => {
   res.status(200).send({
     websocket: 'disconnected'
   });
-})
+});
 
 app.get('/zopim/ping', function(req, res, next) {
   zp_session.findAll().then( zp_session_data => {
@@ -296,22 +296,8 @@ function doHandleMessage(message) {
           /***********************************
            *Transfer channel to a department *
            ***********************************/
-          const transferToDepartmentQuery = {
-            payload: {
-              query: `mutation {
-                                transferToDepartment(
-                                    channel_id: "${channelToBeTransferred}", 
-                                    department_id: "${onlineDepartment.id}",
-                                    leave: true) {
-                                    success
-                                }
-                            }`
-            },
-            type: "request",
-            id: REQUEST_ID.TRANSFER_TO_DEPARTMENT
-          };
-
-          newWs.send(JSON.stringify(transferToDepartmentQuery));
+          newWs.send(JSON.stringify(transferToDepartmentPayload(channelToBeTransferred, onlineDepartment.id)));
+          
         } else {
 
           var newMessage = "Maaf, sepertinya hanya aku yang sedang online hehe";
@@ -375,6 +361,24 @@ function doHandleMessage(message) {
 
 function doHandleClose() {
 	console.log('=== Web Socket is CLOSING ===');
+}
+
+function transferToDepartmentPayload (channelToBeTransferred, onlineDepartment) {
+  const transferToDepartmentQuery = {
+    payload: {
+      query: `mutation {
+                        transferToDepartment(
+                            channel_id: "${channelToBeTransferred}", 
+                            department_id: "${onlineDepartment}",
+                            leave: true) {
+                            success
+                        }
+                    }`
+    },
+    type: "request",
+    id: REQUEST_ID.TRANSFER_TO_DEPARTMENT
+  };
+  return transferToDepartmentQuery;
 }
 
 function startAgentSessionPayload (ACCESS_TOKEN) {
