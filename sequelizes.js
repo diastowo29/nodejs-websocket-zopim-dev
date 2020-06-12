@@ -1,15 +1,15 @@
 const Sequelize = require('sequelize')
 const sessionModel = require('./models/session')
 
-const sequelize_db = new Sequelize('zp-db', 'root', '', {
-  host: 'localhost',
-  dialect: 'mysql',
-  pool: {
-    max: 10,
-    min: 0,
-    acquire: 30000,
-    idle: 10000
-  }
+const sequelize_db = new Sequelize(process.env.DATABASE_URL, {
+  dialectOptions: {
+    ssl: {
+      require: true,
+      rejectUnauthorized: false,
+    },
+    keepAlive: true,        
+  },      
+  ssl: true
 })
 
 const zp_session = sessionModel(sequelize_db, Sequelize)
