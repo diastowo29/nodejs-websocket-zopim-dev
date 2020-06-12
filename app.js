@@ -79,6 +79,7 @@ app.post('/zopim/fromkata', function(req, res, next) {
 		let channel_id = req.body.userId;
 
 		console.log(newMessage);
+    
 		newWs.send(JSON.stringify(sendMsgPayload(channel_id, newMessage, true)));
 		if (newMessage.toLowerCase().startsWith('duh maaf')) {
 			newWs.send(JSON.stringify(sendBotDontGetPayload(channel_id)));
