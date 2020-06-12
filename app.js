@@ -74,6 +74,7 @@ const channelsToBeTransferred = [];
 app.post('/zopim/fromkata', function(req, res, next) {
 	zp_session.findAll().then( zp_session_data => {
 		let websocket_url = zp_session_data[0].websocket_url;
+    console.log(req.body)
 		let newMessage = req.body.messages[0].content;
 		let channel_id = req.body.userId;
 
